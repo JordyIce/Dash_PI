@@ -91,15 +91,47 @@ export default async function handler(req, res) {
       return null;
     }
 
-    var motivoCol = findCol(['motivo_improd', 'motivo_improdutividade', 'motivo', 'motivos']);
+    // Find motivo column - prefer exact matches first
+    var motivoCol = findCol(['motivo_improd', 'motivo_improdutividade', 'motivo_da_improdutividade']);
     var motPartial = null;
     if (!motivoCol) {
+      // Look for column containing BOTH motivo and improd
       for (var hi = 0; hi < header.length; hi++) {
-        if (header[hi].indexOf('motivo') !== -1 || header[hi].indexOf('improd') !== -1) {
+        if (header[hi].indexOf('motivo') !== -1 && header[hi].indexOf('improd') !== -1) {
           motPartial = header[hi];
           break;
         }
       }
+    }
+    if (!motivoCol && !motPartial) {
+      // Fallback: any column with motivo
+      for (var hi2 = 0; hi2 < header.length; hi2++) {
+        if (header[hi2].indexOf('motivo') !== -1) {
+          motPartial = header[hi2];
+          break;
+        }
+      }
+    }
+
+    // Sanitize motivo values - filter out data that leaked from other columns
+    function isValidMotivo(val) {
+      if (!val) return false;
+      var v = val.trim();
+      if (v === '') return false;
+      var upper = v.toUpperCase();
+      // Filter out SIM/NAO (from PRODUZIU column)
+      if (upper === 'NAO' || upper === 'SIM' || upper === 'N' || upper === 'S') return false;
+      // Filter out pure numbers (from VALOR or other numeric columns)
+      if (/^[\d.,]+$/.test(v)) return false;
+      // Filter out currency values
+      if (/^R\$/i.test(v)) return false;
+      // Filter out dates
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return false;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+      // Filter out short numbers (1-3 digits only)
+      if (/^\d{1,3}$/.test(v)) return false;
+      // Valid motivo
+      return true;
     }
 
     var records = rows.map(function(r) {
@@ -115,17 +147,27 @@ export default async function handler(req, res) {
       var valor = parseVal(vl);
       var produziu = valor > 0 ? 'SIM' : 'NAO';
 
+      // Clean motivo - only keep valid reason strings
+      var cleanMotivo = isValidMotivo(mt) ? mt.trim().toUpperCase() : '';
+
       return {
         e: enc.trim().toUpperCase(),
         tt: tt.trim().toUpperCase(),
         d: parseDate(dt),
         v: valor,
         p: produziu,
-        m: mt.trim().toUpperCase(),
+        m: cleanMotivo,
       };
     }).filter(function(r) { return r.d && r.e; });
 
-    res.status(200).json({ records: records, updated: new Date().toISOString(), total: records.length, columns: header });
+    res.status(200).json({
+      records: records,
+      updated: new Date().toISOString(),
+      total: records.length,
+      columns: header,
+      rawColumns: rawHeader,
+      motivoColUsed: motivoCol || motPartial || 'none'
+    });
   } catch (err) {
     console.error('API Error:', err);
     res.status(500).json({ error: err.message });
