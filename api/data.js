@@ -11,35 +11,77 @@ export default async function handler(req, res) {
     if (!response.ok) throw new Error('Sheet fetch failed: ' + response.status);
     var csv = await response.text();
 
-    var lines = [];
-    var current = '';
-    var inQuotes = false;
-    for (var i = 0; i < csv.length; i++) {
-      var ch = csv[i];
-      if (ch === '"') { inQuotes = !inQuotes; }
-      else if (ch === '\n' && !inQuotes) { lines.push(current); current = ''; }
-      else { current += ch; }
-    }
-    if (current) lines.push(current);
-
-    function parseLine(line) {
-      var fields = [];
+    // =========================================================
+    // PARSER CSV CORRIGIDO - passo unico que trata aspas,
+    // virgulas internas e quebras de linha dentro de campos
+    // =========================================================
+    function parseCSV(text) {
+      var rows = [];
+      var row = [];
       var field = '';
-      var inQ = false;
-      for (var j = 0; j < line.length; j++) {
-        var c = line[j];
-        if (c === '"') { inQ = !inQ; }
-        else if (c === ',' && !inQ) { fields.push(field.trim()); field = ''; }
-        else { field += c; }
+      var inQuotes = false;
+      var i = 0;
+
+      while (i < text.length) {
+        var ch = text[i];
+
+        if (inQuotes) {
+          if (ch === '"') {
+            if (i + 1 < text.length && text[i + 1] === '"') {
+              field += '"';
+              i += 2;
+              continue;
+            }
+            inQuotes = false;
+            i++;
+            continue;
+          }
+          field += ch;
+          i++;
+          continue;
+        }
+
+        if (ch === '"') {
+          inQuotes = true;
+          i++;
+          continue;
+        }
+        if (ch === ',') {
+          row.push(field.trim());
+          field = '';
+          i++;
+          continue;
+        }
+        if (ch === '\r') {
+          i++;
+          continue;
+        }
+        if (ch === '\n') {
+          row.push(field.trim());
+          rows.push(row);
+          row = [];
+          field = '';
+          i++;
+          continue;
+        }
+        field += ch;
+        i++;
       }
-      fields.push(field.trim());
-      return fields;
+
+      if (field || row.length > 0) {
+        row.push(field.trim());
+        rows.push(row);
+      }
+
+      return rows;
     }
 
-    var headerLine = lines.length > 1 ? lines[1] : lines[0];
-    var dataStartIdx = lines.length > 1 ? 2 : 1;
+    var allRows = parseCSV(csv);
 
-    var rawHeader = parseLine(headerLine);
+    var headerRowIdx = allRows.length > 1 ? 1 : 0;
+    var dataStartIdx = allRows.length > 1 ? 2 : 1;
+
+    var rawHeader = allRows[headerRowIdx];
     var header = rawHeader.map(function(h) {
       return h.toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -48,9 +90,10 @@ export default async function handler(req, res) {
     });
 
     var rows = [];
-    for (var k = dataStartIdx; k < lines.length; k++) {
-      if (!lines[k].trim()) continue;
-      var fields = parseLine(lines[k]);
+    for (var k = dataStartIdx; k < allRows.length; k++) {
+      var fields = allRows[k];
+      if (!fields || fields.length === 0) continue;
+      if (fields.join('').trim() === '') continue;
       var row = {};
       header.forEach(function(h, idx) { row[h] = fields[idx] || ''; });
       rows.push(row);
@@ -91,11 +134,9 @@ export default async function handler(req, res) {
       return null;
     }
 
-    // Find motivo column - prefer exact matches first
     var motivoCol = findCol(['motivo_improd', 'motivo_improdutividade', 'motivo_da_improdutividade']);
     var motPartial = null;
     if (!motivoCol) {
-      // Look for column containing BOTH motivo and improd
       for (var hi = 0; hi < header.length; hi++) {
         if (header[hi].indexOf('motivo') !== -1 && header[hi].indexOf('improd') !== -1) {
           motPartial = header[hi];
@@ -104,7 +145,6 @@ export default async function handler(req, res) {
       }
     }
     if (!motivoCol && !motPartial) {
-      // Fallback: any column with motivo
       for (var hi2 = 0; hi2 < header.length; hi2++) {
         if (header[hi2].indexOf('motivo') !== -1) {
           motPartial = header[hi2];
@@ -113,24 +153,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // Sanitize motivo values - filter out data that leaked from other columns
     function isValidMotivo(val) {
       if (!val) return false;
       var v = val.trim();
       if (v === '') return false;
       var upper = v.toUpperCase();
-      // Filter out SIM/NAO (from PRODUZIU column)
       if (upper === 'NAO' || upper === 'SIM' || upper === 'N' || upper === 'S') return false;
-      // Filter out pure numbers (from VALOR or other numeric columns)
       if (/^[\d.,]+$/.test(v)) return false;
-      // Filter out currency values
       if (/^R\$/i.test(v)) return false;
-      // Filter out dates
       if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return false;
       if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
-      // Filter out short numbers (1-3 digits only)
       if (/^\d{1,3}$/.test(v)) return false;
-      // Valid motivo
       return true;
     }
 
@@ -146,8 +179,6 @@ export default async function handler(req, res) {
 
       var valor = parseVal(vl);
       var produziu = valor > 0 ? 'SIM' : 'NAO';
-
-      // Clean motivo - only keep valid reason strings
       var cleanMotivo = isValidMotivo(mt) ? mt.trim().toUpperCase() : '';
 
       return {
