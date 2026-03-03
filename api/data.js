@@ -11,20 +11,15 @@ export default async function handler(req, res) {
     if (!response.ok) throw new Error('Sheet fetch failed: ' + response.status);
     var csv = await response.text();
 
-    // =========================================================
-    // PARSER CSV CORRIGIDO - passo unico que trata aspas,
-    // virgulas internas e quebras de linha dentro de campos
-    // =========================================================
+    // Parser CSV passo unico - trata aspas, virgulas e quebras de linha internas
     function parseCSV(text) {
       var rows = [];
       var row = [];
       var field = '';
       var inQuotes = false;
       var i = 0;
-
       while (i < text.length) {
         var ch = text[i];
-
         if (inQuotes) {
           if (ch === '"') {
             if (i + 1 < text.length && text[i + 1] === '"') {
@@ -40,44 +35,18 @@ export default async function handler(req, res) {
           i++;
           continue;
         }
-
-        if (ch === '"') {
-          inQuotes = true;
-          i++;
-          continue;
-        }
-        if (ch === ',') {
-          row.push(field.trim());
-          field = '';
-          i++;
-          continue;
-        }
-        if (ch === '\r') {
-          i++;
-          continue;
-        }
-        if (ch === '\n') {
-          row.push(field.trim());
-          rows.push(row);
-          row = [];
-          field = '';
-          i++;
-          continue;
-        }
+        if (ch === '"') { inQuotes = true; i++; continue; }
+        if (ch === ',') { row.push(field.trim()); field = ''; i++; continue; }
+        if (ch === '\r') { i++; continue; }
+        if (ch === '\n') { row.push(field.trim()); rows.push(row); row = []; field = ''; i++; continue; }
         field += ch;
         i++;
       }
-
-      if (field || row.length > 0) {
-        row.push(field.trim());
-        rows.push(row);
-      }
-
+      if (field || row.length > 0) { row.push(field.trim()); rows.push(row); }
       return rows;
     }
 
     var allRows = parseCSV(csv);
-
     var headerRowIdx = allRows.length > 1 ? 1 : 0;
     var dataStartIdx = allRows.length > 1 ? 2 : 1;
 
@@ -134,7 +103,7 @@ export default async function handler(req, res) {
       return null;
     }
 
-    var motivoCol = findCol(['motivo_improd', 'motivo_improdutividade', 'motivo_da_improdutividade']);
+    var motivoCol = findCol(['motivo_improd', 'motivo_improdutividade', 'motivo_da_improdutividade', 'motivo_de_improdutividade']);
     var motPartial = null;
     if (!motivoCol) {
       for (var hi = 0; hi < header.length; hi++) {
@@ -172,6 +141,7 @@ export default async function handler(req, res) {
       var tt = getField(r, ['tipo_turma', 'tipo_de_turma', 'ipo_de_turma', 'tipo']);
       var dt = getField(r, ['data', 'datas']);
       var vl = getField(r, ['valor', 'valores']);
+      var base = getField(r, ['centro_de_servico', 'centro_servico', 'base']);
 
       var mt = '';
       if (motivoCol) { mt = r[motivoCol] || ''; }
@@ -188,6 +158,7 @@ export default async function handler(req, res) {
         v: valor,
         p: produziu,
         m: cleanMotivo,
+        b: base.trim().toUpperCase(),
       };
     }).filter(function(r) { return r.d && r.e; });
 
