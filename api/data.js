@@ -36,13 +36,11 @@ export default async function handler(req, res) {
       return fields;
     }
 
-    // Row 1 (index 0) = meta header (MANUAL/PADRAO, AUTOMATICO...)
-    // Row 2 (index 1) = real column names (ENCARREGADO, SUPERVISOR, TIPO DE TURMA...)
-    // Data starts from row 3 (index 2)
     var headerLine = lines.length > 1 ? lines[1] : lines[0];
     var dataStartIdx = lines.length > 1 ? 2 : 1;
 
-    var header = parseLine(headerLine).map(function(h) {
+    var rawHeader = parseLine(headerLine);
+    var header = rawHeader.map(function(h) {
       return h.toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/\s+/g, '_')
@@ -86,39 +84,48 @@ export default async function handler(req, res) {
       return '';
     }
 
+    function findCol(names) {
+      for (var i = 0; i < names.length; i++) {
+        if (header.indexOf(names[i]) !== -1) return names[i];
+      }
+      return null;
+    }
+
+    var motivoCol = findCol(['motivo_improd', 'motivo_improdutividade', 'motivo', 'motivos']);
+    var motPartial = null;
+    if (!motivoCol) {
+      for (var hi = 0; hi < header.length; hi++) {
+        if (header[hi].indexOf('motivo') !== -1 || header[hi].indexOf('improd') !== -1) {
+          motPartial = header[hi];
+          break;
+        }
+      }
+    }
+
     var records = rows.map(function(r) {
       var enc = getField(r, ['encarregado', 'encarregados', 'enc']);
       var tt = getField(r, ['tipo_turma', 'tipo_de_turma', 'ipo_de_turma', 'tipo']);
       var dt = getField(r, ['data', 'datas']);
       var vl = getField(r, ['valor', 'valores']);
-      var pr = getField(r, ['produziu', 'produtivo']);
-      var mt = getField(r, ['motivo_improd', 'motivo_improdutividade', 'motivo', 'motivo_improd']);
+
+      var mt = '';
+      if (motivoCol) { mt = r[motivoCol] || ''; }
+      else if (motPartial) { mt = r[motPartial] || ''; }
+
+      var valor = parseVal(vl);
+      var produziu = valor > 0 ? 'SIM' : 'NAO';
 
       return {
         e: enc.trim().toUpperCase(),
         tt: tt.trim().toUpperCase(),
         d: parseDate(dt),
-        v: parseVal(vl),
-        p: pr.trim().toUpperCase() === 'SIM' ? 'SIM' : 'NAO',
+        v: valor,
+        p: produziu,
         m: mt.trim().toUpperCase(),
       };
     }).filter(function(r) { return r.d && r.e; });
 
-    if (records.length === 0) {
-      res.status(200).json({
-        records: [],
-        updated: new Date().toISOString(),
-        debug: {
-          totalLines: lines.length,
-          headerUsed: header,
-          sampleRow: rows.length > 0 ? rows[0] : null,
-          firstLines: lines.slice(0, 3).map(function(l) { return l.substring(0, 200); })
-        }
-      });
-      return;
-    }
-
-    res.status(200).json({ records: records, updated: new Date().toISOString() });
+    res.status(200).json({ records: records, updated: new Date().toISOString(), total: records.length, columns: header });
   } catch (err) {
     console.error('API Error:', err);
     res.status(500).json({ error: err.message });
