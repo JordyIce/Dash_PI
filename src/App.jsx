@@ -179,7 +179,7 @@ export default function Dashboard() {
       <div style={{background:'linear-gradient(135deg,#0f2847 0%,#1a1a3e 50%,#0a1628 100%)',borderBottom:`1px solid ${C.cardBorder}`,padding:'20px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <div style={{width:5,height:36,background:`linear-gradient(180deg,${C.accent},${C.cyan})`,borderRadius:3}}/>
-          <div><h1 style={{margin:0,fontSize:22,fontWeight:800,letterSpacing:-0.5}}>OPERAÇÃO PIAUÍ — CONTRATO LPT</h1><div style={{fontSize:13,color:C.textDim,marginTop:2}}>Produção Geral &middot; {Dados ao vivo do Google Sheets
+          <div><h1 style={{margin:0,fontSize:22,fontWeight:800,letterSpacing:-0.5}}>OPERAÇÃO PIAUÍ — CONTRATO LPT</h1><div style={{fontSize:13,color:C.textDim,marginTop:2}}>Produção Geral &middot; Dados ao vivo do Google Sheets
               {updated && <span> &middot; {updated.toLocaleTimeString('pt-BR')}</span>}
               {loading && <span style={{color:C.orange}}> &middot; Atualizando...</span>}
             </div></div>
@@ -239,7 +239,7 @@ export default function Dashboard() {
           <Box><Sec>Tendência % Improdutividade Diária</Sec><ResponsiveContainer width="100%" height={280}><ComposedChart data={improdChart} margin={{top:10,right:20,bottom:0,left:0}}><defs><linearGradient id="ig1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.red} stopOpacity={0.25}/><stop offset="100%" stopColor={C.red} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1e293b"/><XAxis dataKey="label" tick={{fill:C.textDim,fontSize:10}} axisLine={false} tickLine={false} interval={3}/><YAxis tick={{fill:C.textDim,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${v}%`} domain={[0,100]}/><Tooltip formatter={v=>[`${v}%`]} contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="pct_improd" name="% Improdutivo" stroke={C.red} fill="url(#ig1)" strokeWidth={2} dot={false}/><Line type="monotone" dataKey="pct_improd" stroke={C.red} strokeWidth={2.5} dot={{r:3,fill:C.red}} activeDot={{r:5}} name="% Improdutivo"/></ComposedChart></ResponsiveContainer></Box>
         </>)}
 
-        <div style={{marginTop:28,padding:'16px 0',borderTop:`1px solid ${C.cardBorder}`,textAlign:'center',color:C.textDim,fontSize:11}}>Dashboard Operação Piauí — Contrato LPT &middot; {Dados ao vivo do Google Sheets &middot; {fd.kpis.total_registros} registros</div>
+        <div style={{marginTop:28,padding:'16px 0',borderTop:`1px solid ${C.cardBorder}`,textAlign:'center',color:C.textDim,fontSize:11}}>Dashboard Operação Piauí — Contrato LPT &middot; Dados ao vivo do Google Sheets &middot; {fd.kpis.total_registros} registros</div>
       </div>
     </div>
   );
