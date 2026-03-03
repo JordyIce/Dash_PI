@@ -150,7 +150,7 @@ export default function Dashboard() {
 
   if (loading && !allRecords) return (
     <div style={{minHeight:'100vh',background:C.bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:C.text,fontFamily:"'Segoe UI',sans-serif"}}>
-      <div style={{fontSize:48,marginBottom:20}}>\u{1F4CA}</div>
+      <div style={{fontSize:48,marginBottom:20}}>📊</div>
       <div style={{fontSize:20,fontWeight:700,marginBottom:8}}>Carregando Dashboard...</div>
       <div style={{fontSize:14,color:C.textDim}}>Buscando dados da planilha Google Sheets</div>
     </div>
@@ -158,7 +158,7 @@ export default function Dashboard() {
 
   if (error && !allRecords) return (
     <div style={{minHeight:'100vh',background:C.bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:C.text,fontFamily:"'Segoe UI',sans-serif"}}>
-      <div style={{fontSize:48,marginBottom:20}}>\u26A0\uFE0F</div>
+      <div style={{fontSize:48,marginBottom:20}}>⚠️</div>
       <div style={{fontSize:20,fontWeight:700,marginBottom:8,color:C.red}}>Erro ao carregar dados</div>
       <div style={{fontSize:14,color:C.textDim,marginBottom:20,maxWidth:400,textAlign:'center'}}>{error}</div>
       <button onClick={load} style={{background:C.accent,color:'#fff',border:'none',borderRadius:8,padding:'10px 24px',fontSize:14,fontWeight:600,cursor:'pointer'}}>Tentar Novamente</button>
