@@ -5,9 +5,6 @@ import {
   ComposedChart, Area, Legend, Line
 } from "recharts";
 
-var FLORIANO_ENCS = new Set(['JADYSON RODRIGUES','RAFAEL FRANCISCO ALVES DE OLIVEIRA','DEIVID SANTOS SILVA','ROSINALDO OLIVEIRA DE ALMEIDA','CARLOS DAVID DE FREITAS MATOS','MARCOS ANTONIO BARBOSA MACHADO','CARLOS EDUARDO ARAUJO VIEIRA','VALDIRAN CARDOSO']);
-function getBase(enc) { return FLORIANO_ENCS.has(enc) ? 'FLORIANO' : 'BOM JESUS'; }
-
 var MONTH_NAMES = {
   '01': 'Janeiro', '02': 'Fevereiro', '03': 'Marco', '04': 'Abril',
   '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
@@ -141,12 +138,17 @@ export default function App() {
     if (!allRecords) return [];
     return [...new Set(allRecords.map(function(r) { return r.tt; }).filter(Boolean))].sort();
   }, [allRecords]);
+  // Bases dinamicas direto da planilha (coluna CENTRO DE SERVICO)
+  var baseTypes = useMemo(function() {
+    if (!allRecords) return [];
+    return [...new Set(allRecords.map(function(r) { return r.b; }).filter(Boolean))].sort();
+  }, [allRecords]);
   var fd = useMemo(function() {
     if (!allRecords) return null;
     var filtered = allRecords;
     if (monthFilter !== 'all') { filtered = filtered.filter(function(r) { return r.d && r.d.startsWith(monthFilter); }); }
     if (turmaFilter !== 'all') filtered = filtered.filter(function(r) { return r.tt === turmaFilter; });
-    if (baseFilter !== 'all') filtered = filtered.filter(function(r) { return getBase(r.e) === baseFilter; });
+    if (baseFilter !== 'all') filtered = filtered.filter(function(r) { return r.b === baseFilter; });
     return computeData(filtered);
   }, [allRecords, monthFilter, turmaFilter, baseFilter]);
   if (loading && !allRecords) return (<div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: C.text, fontFamily: "'Segoe UI', sans-serif" }}><div style={{ fontSize: 48, marginBottom: 20 }}>&#128202;</div><div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Carregando Dashboard...</div><div style={{ fontSize: 14, color: C.textDim }}>Buscando dados da planilha Google Sheets</div></div>);
@@ -180,7 +182,8 @@ export default function App() {
           <div style={{ width: 1, height: 24, background: C.cardBorder }} />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>BASE:</span>
-            {[{ k: 'all', l: 'Todas' }, { k: 'BOM JESUS', l: 'Bom Jesus' }, { k: 'FLORIANO', l: 'Floriano' }].map(function(f) { return (<button key={f.k} onClick={function() { setBaseFilter(f.k); }} style={{ background: baseFilter === f.k ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === f.k ? C.cyan : C.cardBorder), color: baseFilter === f.k ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{f.l}</button>); })}
+            <button onClick={function() { setBaseFilter('all'); }} style={{ background: baseFilter === 'all' ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === 'all' ? C.cyan : C.cardBorder), color: baseFilter === 'all' ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Todas</button>
+            {baseTypes.map(function(b) { return (<button key={b} onClick={function() { setBaseFilter(b); }} style={{ background: baseFilter === b ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === b ? C.cyan : C.cardBorder), color: baseFilter === b ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{b}</button>); })}
           </div>
           <div style={{ width: 1, height: 24, background: C.cardBorder }} />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
