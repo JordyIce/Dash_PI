@@ -73,6 +73,20 @@ var shortName = function(n) { var p = n.split(' '); return p.length > 2 ? p[0] +
 var C = { bg: '#0a1628', card: '#111d33', cardBorder: '#1a2d4a', accent: '#3b82f6', cyan: '#06b6d4', green: '#10b981', red: '#ef4444', orange: '#f59e0b', purple: '#8b5cf6', pink: '#ec4899', text: '#e2e8f0', textMuted: '#94a3b8', textDim: '#64748b' };
 var PIE_C = ['#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981', '#f97316'];
 
+var dateInputStyle = {
+  background: '#1a2d4a',
+  color: '#e2e8f0',
+  border: '1px solid #3b82f6',
+  borderRadius: 8,
+  padding: '6px 10px',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+  outline: 'none',
+  fontFamily: "'JetBrains Mono', monospace",
+  colorScheme: 'dark',
+};
+
 function KPI({ label, value, sub, color, icon }) {
   return (
     <div style={{ background: 'linear-gradient(135deg, ' + C.card + ' 0%, ' + C.bg + ' 100%)', border: '1px solid ' + C.cardBorder, borderRadius: 16, padding: '20px 24px', position: 'relative', overflow: 'hidden' }}>
@@ -105,17 +119,46 @@ function Tip({ active, payload, label }) {
 }
 
 var TABS = ['Geral', 'Turmas', 'Improdutividade'];
-var selectStyle = { background: '#1a2d4a', color: '#e2e8f0', border: '1px solid #3b82f6', borderRadius: 8, padding: '6px 32px 6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', outline: 'none', appearance: 'none', WebkitAppearance: 'none', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' };
+
+// Atalhos rapidos de periodo
+function getQuickRange(key, allDates) {
+  if (!allDates || allDates.length === 0) return { start: '', end: '' };
+  var today = allDates[allDates.length - 1]; // ultima data disponivel
+  var d = new Date(today + 'T12:00:00');
+  if (key === 'today') {
+    return { start: today, end: today };
+  }
+  if (key === '7d') {
+    var s7 = new Date(d); s7.setDate(d.getDate() - 6);
+    return { start: s7.toISOString().slice(0, 10), end: today };
+  }
+  if (key === '15d') {
+    var s15 = new Date(d); s15.setDate(d.getDate() - 14);
+    return { start: s15.toISOString().slice(0, 10), end: today };
+  }
+  if (key === '30d') {
+    var s30 = new Date(d); s30.setDate(d.getDate() - 29);
+    return { start: s30.toISOString().slice(0, 10), end: today };
+  }
+  if (key === 'month') {
+    var mStart = today.substring(0, 7) + '-01';
+    return { start: mStart, end: today };
+  }
+  return { start: '', end: '' };
+}
 
 export default function App() {
   var [allRecords, setAllRecords] = useState(null);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
   var [tab, setTab] = useState('Geral');
-  var [monthFilter, setMonthFilter] = useState('all');
+  var [dateStart, setDateStart] = useState('');
+  var [dateEnd, setDateEnd] = useState('');
   var [turmaFilter, setTurmaFilter] = useState('all');
   var [baseFilter, setBaseFilter] = useState('all');
   var [updated, setUpdated] = useState(null);
+  var [activeQuick, setActiveQuick] = useState('all');
+
   var load = async function() {
     setLoading(true); setError(null);
     try {
@@ -127,30 +170,56 @@ export default function App() {
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
   useEffect(function() { load(); var iv = setInterval(load, 5*60*1000); return function() { clearInterval(iv); }; }, []);
-  var availableMonths = useMemo(function() {
+
+  var allDates = useMemo(function() {
     if (!allRecords) return [];
-    var ms = {};
-    allRecords.forEach(function(r) { if (r.d && r.d.length >= 7) { ms[r.d.substring(0,7)] = true; } });
-    return Object.keys(ms).sort();
+    return [...new Set(allRecords.map(function(r) { return r.d; }).filter(Boolean))].sort();
   }, [allRecords]);
-  function formatMonthLabel(ym) { var pts = ym.split('-'); return (MONTH_NAMES[pts[1]]||pts[1]) + ' / ' + pts[0]; }
+
   var turmaTypes = useMemo(function() {
     if (!allRecords) return [];
     return [...new Set(allRecords.map(function(r) { return r.tt; }).filter(Boolean))].sort();
   }, [allRecords]);
-  // Bases dinamicas direto da planilha (coluna CENTRO DE SERVICO)
+
   var baseTypes = useMemo(function() {
     if (!allRecords) return [];
     return [...new Set(allRecords.map(function(r) { return r.b; }).filter(Boolean))].sort();
   }, [allRecords]);
+
+  function applyQuick(key) {
+    setActiveQuick(key);
+    if (key === 'all') {
+      setDateStart(''); setDateEnd('');
+      return;
+    }
+    var range = getQuickRange(key, allDates);
+    setDateStart(range.start);
+    setDateEnd(range.end);
+  }
+
+  // Quando o usuario muda a data manualmente, desativa o atalho
+  function onDateStartChange(v) { setDateStart(v); setActiveQuick('custom'); }
+  function onDateEndChange(v) { setDateEnd(v); setActiveQuick('custom'); }
+
+  // Label do periodo selecionado
+  var periodLabel = useMemo(function() {
+    if (!dateStart && !dateEnd) return 'Todos os dados';
+    var s = dateStart ? dateStart.split('-').reverse().join('/') : '...';
+    var e = dateEnd ? dateEnd.split('-').reverse().join('/') : '...';
+    if (dateStart === dateEnd && dateStart) return s;
+    return s + '  a  ' + e;
+  }, [dateStart, dateEnd]);
+
   var fd = useMemo(function() {
     if (!allRecords) return null;
     var filtered = allRecords;
-    if (monthFilter !== 'all') { filtered = filtered.filter(function(r) { return r.d && r.d.startsWith(monthFilter); }); }
+    if (dateStart) { filtered = filtered.filter(function(r) { return r.d && r.d >= dateStart; }); }
+    if (dateEnd) { filtered = filtered.filter(function(r) { return r.d && r.d <= dateEnd; }); }
     if (turmaFilter !== 'all') filtered = filtered.filter(function(r) { return r.tt === turmaFilter; });
     if (baseFilter !== 'all') filtered = filtered.filter(function(r) { return r.b === baseFilter; });
     return computeData(filtered);
-  }, [allRecords, monthFilter, turmaFilter, baseFilter]);
+  }, [allRecords, dateStart, dateEnd, turmaFilter, baseFilter]);
+
   if (loading && !allRecords) return (<div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: C.text, fontFamily: "'Segoe UI', sans-serif" }}><div style={{ fontSize: 48, marginBottom: 20 }}>&#128202;</div><div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Carregando Dashboard...</div><div style={{ fontSize: 14, color: C.textDim }}>Buscando dados da planilha Google Sheets</div></div>);
   if (error && !allRecords) return (<div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: C.text, fontFamily: "'Segoe UI', sans-serif" }}><div style={{ fontSize: 48, marginBottom: 20 }}>&#9888;&#65039;</div><div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: C.red }}>Erro ao carregar dados</div><div style={{ fontSize: 14, color: C.textDim, marginBottom: 20, maxWidth: 400, textAlign: 'center' }}>{error}</div><button onClick={load} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Tentar Novamente</button></div>);
   if (!fd) return null;
@@ -159,6 +228,14 @@ export default function App() {
   var improdChart = fd.improd_trend.map(function(d) { return { ...d, label: shortDate(d.data) }; });
   var topMot = fd.motivos.slice(0, 6);
   var totMot = topMot.reduce(function(s, m) { return s + m.count; }, 0);
+  var quickButtons = [
+    { k: 'all', l: 'Tudo' },
+    { k: 'today', l: 'Hoje' },
+    { k: '7d', l: '7 dias' },
+    { k: '15d', l: '15 dias' },
+    { k: '30d', l: '30 dias' },
+    { k: 'month', l: 'Mes atual' },
+  ];
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Segoe UI', -apple-system, sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet" />
@@ -170,32 +247,78 @@ export default function App() {
             <div style={{ fontSize: 13, color: C.textDim, marginTop: 2 }}>Dados ao vivo do Google Sheets{updated && <span> &middot; {updated.toLocaleTimeString('pt-BR')}</span>}{loading && <span style={{ color: C.orange }}> &middot; Atualizando...</span>}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={load} style={{ background: 'transparent', border: '1px solid ' + C.cardBorder, color: C.textMuted, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>&#128260;</button>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>PERIODO:</span>
-            <select value={monthFilter} onChange={function(e) { setMonthFilter(e.target.value); }} style={selectStyle}>
-              <option value="all">Todos os Meses</option>
-              {availableMonths.map(function(ym) { return <option key={ym} value={ym}>{formatMonthLabel(ym)}</option>; })}
-            </select>
-          </div>
-          <div style={{ width: 1, height: 24, background: C.cardBorder }} />
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>BASE:</span>
-            <button onClick={function() { setBaseFilter('all'); }} style={{ background: baseFilter === 'all' ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === 'all' ? C.cyan : C.cardBorder), color: baseFilter === 'all' ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Todas</button>
-            {baseTypes.map(function(b) { return (<button key={b} onClick={function() { setBaseFilter(b); }} style={{ background: baseFilter === b ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === b ? C.cyan : C.cardBorder), color: baseFilter === b ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{b}</button>); })}
-          </div>
-          <div style={{ width: 1, height: 24, background: C.cardBorder }} />
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>TURMA:</span>
-            <button onClick={function() { setTurmaFilter('all'); }} style={{ background: turmaFilter === 'all' ? C.purple : 'transparent', border: '1px solid ' + (turmaFilter === 'all' ? C.purple : C.cardBorder), color: turmaFilter === 'all' ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Todas</button>
-            {turmaTypes.map(function(t) { return (<button key={t} onClick={function() { setTurmaFilter(t); }} style={{ background: turmaFilter === t ? C.purple : 'transparent', border: '1px solid ' + (turmaFilter === t ? C.purple : C.cardBorder), color: turmaFilter === t ? '#fff' : C.textMuted, borderRadius: 8, padding: '6px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{t}</button>); })}
-          </div>
+        <button onClick={load} style={{ background: 'transparent', border: '1px solid ' + C.cardBorder, color: C.textMuted, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>&#128260;</button>
+      </div>
+
+      {/* Barra de filtros */}
+      <div style={{ padding: '14px 28px', background: '#0d1b30', borderBottom: '1px solid ' + C.cardBorder, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
+
+        {/* PERIODO - atalhos rapidos */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>PERIODO:</span>
+          {quickButtons.map(function(q) { return (
+            <button key={q.k} onClick={function() { applyQuick(q.k); }} style={{
+              background: activeQuick === q.k ? C.accent : 'transparent',
+              border: '1px solid ' + (activeQuick === q.k ? C.accent : C.cardBorder),
+              color: activeQuick === q.k ? '#fff' : C.textMuted,
+              borderRadius: 8, padding: '5px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}>{q.l}</button>
+          ); })}
+        </div>
+
+        <div style={{ width: 1, height: 24, background: C.cardBorder }} />
+
+        {/* PERIODO - inputs de data */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>DE:</span>
+          <input
+            type="date"
+            value={dateStart}
+            onChange={function(e) { onDateStartChange(e.target.value); }}
+            min={allDates[0] || ''}
+            max={dateEnd || allDates[allDates.length - 1] || ''}
+            style={dateInputStyle}
+          />
+          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>ATE:</span>
+          <input
+            type="date"
+            value={dateEnd}
+            onChange={function(e) { onDateEndChange(e.target.value); }}
+            min={dateStart || allDates[0] || ''}
+            max={allDates[allDates.length - 1] || ''}
+            style={dateInputStyle}
+          />
+        </div>
+
+        <div style={{ width: 1, height: 24, background: C.cardBorder }} />
+
+        {/* BASE */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>BASE:</span>
+          <button onClick={function() { setBaseFilter('all'); }} style={{ background: baseFilter === 'all' ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === 'all' ? C.cyan : C.cardBorder), color: baseFilter === 'all' ? '#fff' : C.textMuted, borderRadius: 8, padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Todas</button>
+          {baseTypes.map(function(b) { return (<button key={b} onClick={function() { setBaseFilter(b); }} style={{ background: baseFilter === b ? C.cyan : 'transparent', border: '1px solid ' + (baseFilter === b ? C.cyan : C.cardBorder), color: baseFilter === b ? '#fff' : C.textMuted, borderRadius: 8, padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{b}</button>); })}
+        </div>
+
+        <div style={{ width: 1, height: 24, background: C.cardBorder }} />
+
+        {/* TURMA */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>TURMA:</span>
+          <button onClick={function() { setTurmaFilter('all'); }} style={{ background: turmaFilter === 'all' ? C.purple : 'transparent', border: '1px solid ' + (turmaFilter === 'all' ? C.purple : C.cardBorder), color: turmaFilter === 'all' ? '#fff' : C.textMuted, borderRadius: 8, padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Todas</button>
+          {turmaTypes.map(function(t) { return (<button key={t} onClick={function() { setTurmaFilter(t); }} style={{ background: turmaFilter === t ? C.purple : 'transparent', border: '1px solid ' + (turmaFilter === t ? C.purple : C.cardBorder), color: turmaFilter === t ? '#fff' : C.textMuted, borderRadius: 8, padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{t}</button>); })}
         </div>
       </div>
-      <div style={{ display: 'flex', padding: '0 28px', background: '#0d1b30', borderBottom: '1px solid ' + C.cardBorder }}>
-        {TABS.map(function(t) { return (<button key={t} onClick={function() { setTab(t); }} style={{ background: 'none', border: 'none', color: tab === t ? C.accent : C.textDim, fontSize: 13, fontWeight: 700, padding: '12px 20px', cursor: 'pointer', borderBottom: tab === t ? '2px solid ' + C.accent : '2px solid transparent', letterSpacing: 0.5 }}>{t.toUpperCase()}</button>); })}
+
+      {/* Info do periodo + Tabs */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', background: '#0d1b30', borderBottom: '1px solid ' + C.cardBorder }}>
+        <div style={{ display: 'flex' }}>
+          {TABS.map(function(t) { return (<button key={t} onClick={function() { setTab(t); }} style={{ background: 'none', border: 'none', color: tab === t ? C.accent : C.textDim, fontSize: 13, fontWeight: 700, padding: '12px 20px', cursor: 'pointer', borderBottom: tab === t ? '2px solid ' + C.accent : '2px solid transparent', letterSpacing: 0.5 }}>{t.toUpperCase()}</button>); })}
+        </div>
+        <div style={{ fontSize: 11, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", padding: '8px 0' }}>
+          {periodLabel}
+        </div>
       </div>
+
       <div style={{ padding: '20px 28px', maxWidth: 1400, margin: '0 auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
           <KPI icon="&#128176;" label="Total Produzido" value={fmt(fd.kpis.total_valor)} sub={fd.daily.length + ' dias'} color={C.green} />
